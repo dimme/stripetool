@@ -48,6 +48,7 @@ def convert(input, output):
     entries = csv.DictReader(csv_file)
 
     make_pdf(entries, output)
+    print("[+] PDF saved: " + output)
 
 def make_pdf(entries, output):
     doc = SimpleDocTemplate(output, pagesize=A4)
