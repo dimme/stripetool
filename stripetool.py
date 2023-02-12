@@ -16,7 +16,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 
 @click.group()
-def str2pdf():
+def stripetool():
     """Convert Stripe payout .csv files to .pdf files that can be used for accounting."""
     pass
 
@@ -102,7 +102,7 @@ def make_pdf(entries, output):
     elements.append(table)
     doc.build(elements)
 
-str2pdf.add_command(convert)
+stripetool.add_command(convert)
 
 if __name__ == '__main__':
-    str2pdf()
+    stripetool()
