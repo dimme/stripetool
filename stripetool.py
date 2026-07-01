@@ -3,58 +3,38 @@
 # DO NOT RUN ANY OF THIS CODE UNLESS YOU UNDERSTAND WHAT IT DOES
 # I TAKE NO RESPONSIBILITY FOR ANYTHING, USE ON YOUR OWN RISK
 
-# Copyright Dimitrios Vlastaras 2023
+# Copyright Dimitrios Vlastaras 2026
 
-import click
+import sys
 import os
 import csv
-from reportlab.pdfgen import canvas
-from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.pdfbase import pdfmetrics
+from collections import Counter
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
-
-@click.group()
-def stripetool():
-    """Convert Stripe payout .csv files to .pdf files that can be used for accounting."""
-    pass
-
-@click.command()
-@click.option('--input', prompt="Input .csv file", help='Input .csv file from Stripe payout reports.')
-@click.option('--output', default="", prompt="Output .pdf file", help='Output .pdf file that can be used for accounting. Leave empty for the same name as the input file.')
-def convert(input, output):
-    """Takes a Stripe .csv file and creates a .pdf file."""
-
-    input = os.path.abspath(input)
-    
-    if not os.path.exists(input):
-        print("[-] " + input + " doesn't exist.")
-        exit(1)
-
-    if output == "":
-        output = ".".join(input.split(".")[0:-1])
-
-    if output.split(".")[-1] != "pdf":
-         output = output + ".pdf"
-
-    output = os.path.abspath(output)
-
-    if os.path.exists(output):
-        print("[-] " + output + " already exists.")
-        exit(1)
-
-    csv_file = open(input, mode ='r')
-    entries = csv.DictReader(csv_file)
-
-    make_pdf(entries, output)
-    print("[+] PDF saved: " + output)
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
+from reportlab.lib.styles import getSampleStyleSheet
+from svglib.svglib import svg2rlg
+from reportlab.graphics import renderPDF
 
 def make_pdf(entries, output):
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    logo_path = os.path.join(script_dir, "stripe_logo.svg")
+
     doc = SimpleDocTemplate(output, pagesize=A4)
     elements = []
+
+    drawing = svg2rlg(logo_path)
+    scale = 80 / drawing.width
+    drawing.width = 80
+    drawing.height = drawing.height * scale
+    drawing.scale(scale, scale)
+    elements.append(drawing)
+    elements.append(Spacer(1, 12))
+
+    month_names = ['January', 'February', 'March', 'April', 'May', 'June',
+                   'July', 'August', 'September', 'October', 'November', 'December']
     
-    data = [['Type', 'Date', 'Paid Amount', 'Amount', 'Fees', 'Net', 'Customer Email']]
+    data = [['Type', 'Date', 'Paid Amount', 'Amount', 'Fees', 'Net', '25% VAT', 'Customer']]
 
     sum_paid_amount = 0
     sum_amount = 0
@@ -64,6 +44,9 @@ def make_pdf(entries, output):
     original_currency = "EUR"
     currency = "SEK"
 
+    months = []
+    years = []
+
     for entry in entries:
 
         original_currency = entry['Currency'].upper()
@@ -71,23 +54,52 @@ def make_pdf(entries, output):
 
         type = entry['Type']
         date = entry['Created']
-        original_amount = entry['Amount'].replace(",",".") + " " + original_currency
-        amount = entry['Converted Amount'].replace(",",".") + " " + currency
-        fees = entry['Fees'].replace(",",".") + " " + currency
-        net = entry['Net'].replace(",",".") + " " + currency
-        customer = entry['Customer Email']
+        date_parts = date.split("-")
+        months.append(date_parts[1])
+        years.append(date_parts[0])
 
-        sum_paid_amount = sum_paid_amount + float(entry['Amount'].replace(",","."))
-        sum_amount = sum_amount + float(entry['Converted Amount'].replace(",","."))
-        sum_fees = sum_fees + float(entry['Fees'].replace(",","."))
-        sum_net = sum_net + float(entry['Net'].replace(",","."))
+        paid_amount_value = float(entry['Amount'].replace(",","."))
+        gross_value = float(entry['Converted Amount'].replace(",","."))
+        fees_value = float(entry['Fees'].replace(",","."))
+        net_value = float(entry['Net'].replace(",","."))
+        vat_value = round(net_value - net_value / 1.25, 2)
 
-        pdf_row = [type, date, original_amount, amount, fees, net, customer]
+        customer = entry.get('Customer Name') or entry.get('Details') or ''
+
+        sum_paid_amount += paid_amount_value
+        sum_amount += gross_value
+        sum_fees += fees_value
+        sum_net += net_value
+
+        fmt = lambda v, c: "{:.2f}".format(v) + " " + c
+        pdf_row = [type, date,
+                   fmt(paid_amount_value, original_currency),
+                   fmt(gross_value, currency),
+                   fmt(fees_value, currency),
+                   fmt(net_value, currency),
+                   fmt(vat_value, currency),
+                   customer]
         data.append(pdf_row)
 
 
-    sum_row = ['Sum', '', "{:.2f}".format(sum_paid_amount) + " " + original_currency, "{:.2f}".format(sum_amount) + " " + currency, "{:.2f}".format(sum_fees) + " " + currency, "{:.2f}".format(sum_net) + " " + currency, '']
+    fmt = lambda v, c: "{:.2f}".format(v) + " " + c
+    sum_row = ['Sum', '',
+               fmt(sum_paid_amount, original_currency),
+               fmt(sum_amount, currency),
+               fmt(sum_fees, currency),
+               fmt(sum_net, currency),
+               fmt(round(sum_net - sum_net / 1.25, 2), currency),
+               '']
     data.append(sum_row)
+
+    most_common_month = int(Counter(months).most_common(1)[0][0])
+    most_common_year = Counter(years).most_common(1)[0][0]
+    month_name = month_names[most_common_month - 1]
+
+    styles = getSampleStyleSheet()
+    header = Paragraph("Stripe Payout Report for " + month_name + " " + most_common_year, styles['Title'])
+    elements.append(header)
+    elements.append(Spacer(1, 12))
 
     table = Table(data)
     table.setStyle(TableStyle([('ALIGN',(0,0),(-1,-1),'RIGHT'),
@@ -102,7 +114,33 @@ def make_pdf(entries, output):
     elements.append(table)
     doc.build(elements)
 
-stripetool.add_command(convert)
-
 if __name__ == '__main__':
-    stripetool()
+    if len(sys.argv) < 2:
+        print("Usage: python3 stripetool.py <input_csv> [output_pdf]")
+        exit(1)
+
+    input_file = os.path.abspath(sys.argv[1])
+
+    if not os.path.exists(input_file):
+        print("[-] " + input_file + " doesn't exist.")
+        exit(1)
+
+    if len(sys.argv) >= 3:
+        output_file = sys.argv[2]
+    else:
+        output_file = ".".join(input_file.split(".")[0:-1])
+
+    if output_file.split(".")[-1] != "pdf":
+        output_file = output_file + ".pdf"
+
+    output_file = os.path.abspath(output_file)
+
+    if os.path.exists(output_file):
+        print("[-] " + output_file + " already exists.")
+        exit(1)
+
+    with open(input_file, mode='r') as csv_file:
+        entries = csv.DictReader(csv_file)
+        make_pdf(entries, output_file)
+
+    print("[+] PDF saved: " + output_file)
