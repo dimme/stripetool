@@ -58,10 +58,16 @@ def make_pdf(entries, output):
         months.append(date_parts[1])
         years.append(date_parts[0])
 
-        paid_amount_value = float(entry['Amount'].replace(",","."))
-        gross_value = float(entry['Converted Amount'].replace(",","."))
-        fees_value = float(entry['Fees'].replace(",","."))
-        net_value = float(entry['Net'].replace(",","."))
+        if type == "Stripe Fee":
+            paid_amount_value = 0
+            gross_value = 0
+            fees_value = -float(entry['Amount'].replace(",","."))
+            net_value = float(entry['Amount'].replace(",","."))
+        else:
+            paid_amount_value = float(entry['Amount'].replace(",","."))
+            gross_value = float(entry['Converted Amount'].replace(",","."))
+            fees_value = float(entry['Fees'].replace(",","."))
+            net_value = float(entry['Net'].replace(",","."))
 
         customer = entry.get('Customer Name') or entry.get('Details') or ''
 
