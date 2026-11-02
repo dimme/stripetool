@@ -62,7 +62,7 @@ def make_pdf(entries, output):
             paid_amount_value = 0
             gross_value = 0
             fees_value = -float(entry['Amount'].replace(",","."))
-            net_value = float(entry['Amount'].replace(",","."))
+            net_value = float(entry['Net'].replace(",","."))
         else:
             paid_amount_value = float(entry['Amount'].replace(",","."))
             gross_value = float(entry['Converted Amount'].replace(",","."))
