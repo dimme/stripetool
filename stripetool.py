@@ -34,7 +34,7 @@ def make_pdf(entries, output):
     month_names = ['January', 'February', 'March', 'April', 'May', 'June',
                    'July', 'August', 'September', 'October', 'November', 'December']
     
-    data = [['Type', 'Date', 'Paid Amount', 'Amount', 'Fees', 'Net', '25% VAT', 'Customer']]
+    data = [['Type', 'Date', 'Paid Amount', 'Amount', 'Fees', 'Net', 'Customer']]
 
     sum_paid_amount = 0
     sum_amount = 0
@@ -62,7 +62,6 @@ def make_pdf(entries, output):
         gross_value = float(entry['Converted Amount'].replace(",","."))
         fees_value = float(entry['Fees'].replace(",","."))
         net_value = float(entry['Net'].replace(",","."))
-        vat_value = round(net_value - net_value / 1.25, 2)
 
         customer = entry.get('Customer Name') or entry.get('Details') or ''
 
@@ -77,7 +76,6 @@ def make_pdf(entries, output):
                    fmt(gross_value, currency),
                    fmt(fees_value, currency),
                    fmt(net_value, currency),
-                   fmt(vat_value, currency),
                    customer]
         data.append(pdf_row)
 
@@ -88,7 +86,6 @@ def make_pdf(entries, output):
                fmt(sum_amount, currency),
                fmt(sum_fees, currency),
                fmt(sum_net, currency),
-               fmt(round(sum_net - sum_net / 1.25, 2), currency),
                '']
     data.append(sum_row)
 
